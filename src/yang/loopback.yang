@@ -1,0 +1,138 @@
+// =========================================================================
+//  LOOPBACK PACKAGE MODEL
+// =========================================================================
+module loopback {
+
+  namespace "http://com/ciscoas/services/loopback";
+  prefix loopback;
+
+  import ietf-inet-types { prefix inet; }
+  import tailf-common { prefix tailf; }
+  import tailf-ncs { prefix ncs; }
+  import tailf-kicker { prefix kicker; }
+
+  organization "Cisco Systems, Inc.";
+
+  contact
+    " Marcelo Reis
+      mareis@cisco.com
+    ";
+
+  description
+    " Configure device loopback address with an allocated IP address.
+    ";
+
+
+  // =========================================================================
+  //  REVISION
+  // =========================================================================
+
+  revision 2017-12-08 {
+    description
+      "Initial revision.";
+  }
+
+
+  // =========================================================================
+  //  IDENTITIES
+  // =========================================================================
+
+  identity requested-allocations {
+    base ncs:plan-state;
+  }
+
+
+  // =========================================================================
+  //  SERVICES
+  // =========================================================================
+
+  augment /ncs:services {
+    container loopback {
+      tailf:info "Configure loopback interface on a device";
+      tailf:cli-add-mode;
+
+      list device {
+        when "../setup" {
+          tailf:dependency "../setup";
+        }
+
+        tailf:info "Specify device";
+        uses ncs:service-data;
+        uses ncs:plan-data;
+        ncs:servicepoint loopback-servicepoint;
+
+        key name;
+
+        leaf name {
+          tailf:info "Device name";
+          type leafref {
+            path "/ncs:devices/ncs:device/ncs:name";
+          }
+        }
+
+        leaf loopback-id {
+          tailf:info "Loopback interface number";
+          type uint32 {
+            tailf:info "<0-2147483647>;;Loopback interface number";
+            range "0..2147483647";
+          }
+          default "0";
+        }
+      } // list device
+
+      container setup {
+        uses ncs:service-data;
+        ncs:servicepoint "loopback-setup";
+
+        presence yes;
+      }
+
+    } // container loopback
+  } // augment services
+
+  container resource-manager {
+    tailf:info "Configure resource management pools";
+    tailf:cli-add-mode;
+
+    list id-pool {
+      key name;
+
+      leaf name {
+        tailf:info "Unique name for the pool";
+        type string;
+      }
+
+      list allocation {
+        key alloc-id;
+
+        leaf alloc-id {
+          type string;
+        }
+
+        container request {
+          presence yes;
+        }
+
+        container response {
+          config false;
+          tailf:cdb-oper {
+            tailf:persistent true;
+          }
+
+          leaf assigned-id {
+            type uint32;
+          }
+        }
+      } // list allocation
+    } // list id-pool
+
+    tailf:action diff-iter {
+      tailf:actionpoint diff-iter-action;
+      input {
+        uses kicker:action-input-params;
+      }
+      output {
+      }
+    }
+  } // container resource-manager
+}

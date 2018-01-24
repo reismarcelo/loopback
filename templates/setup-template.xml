@@ -1,0 +1,15 @@
+<config-template xmlns="http://tail-f.com/ns/config/1.0">
+    <kickers xmlns="http://tail-f.com/ns/kicker">
+        <data-kicker>
+            <id>resource-diff-iter</id>
+            <monitor>/loopback:resource-manager/loopback:id-pool/loopback:allocation</monitor>
+            <kick-node>/loopback:resource-manager</kick-node>
+            <action-name>diff-iter</action-name>
+        </data-kicker>
+    </kickers>
+    <resource-manager xmlns="http://com/ciscoas/services/loopback">
+        <id-pool>
+            <name>{$POOL_NAME}</name>
+        </id-pool>
+    </resource-manager>
+</config-template>
