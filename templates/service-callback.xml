@@ -2,7 +2,7 @@
     <kickers xmlns="http://tail-f.com/ns/kicker">
         <data-kicker>
             <id>loopback-redeploy-{/name}</id>
-            <monitor>/loopback:resource-manager/id-pool[loopback:name='{$POOL_NAME}']/allocation[loopback:alloc-id='{$ALLOCATION_ID}']/response</monitor>
+            <monitor>/loopback:external-resource-manager/id-pool[loopback:name='{$POOL_NAME}']/allocation[loopback:alloc-id='{$ALLOCATION_ID}']/response</monitor>
             <kick-node xmlns:loopback="http://com/ciscoas/services/loopback">/ncs:services/loopback:loopback/loopback:device[loopback:name='{/name}']</kick-node>
             <action-name>reactive-re-deploy</action-name>
         </data-kicker>

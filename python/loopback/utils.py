@@ -133,6 +133,36 @@ def get_xpath(service_node):
     return re.sub(r'{([^}]+)}', replace_match, service_node._path)
 
 
+class DiffOps(object):
+    """
+    Convenience class for converting NSO diff-iterate operations to string
+    """
+    op_dict = {
+        ncs.MOP_ATTR_SET: 'MOP_ATTR_SET',
+        ncs.MOP_CREATED: 'MOP_CREATED',
+        ncs.MOP_DELETED: 'MOP_DELETED',
+        ncs.MOP_MODIFIED: 'MOP_MODIFIED',
+        ncs.MOP_MOVED_AFTER: 'MOP_MOVED_AFTER',
+        ncs.MOP_VALUE_SET: 'MOP_VALUE_SET',
+    }
+
+    @staticmethod
+    def get_op_str(int_op):
+        """
+        Return the correspondign string value of a diff-iterate operation
+
+        :param int_op: integer representing an ncs diff-iterate operation
+        :return: string value of the operation
+        """
+        return DiffOps.op_dict.get(int_op, 'unknown')
+
+    def __init__(self, op):
+        self.op = op
+
+    def __str__(self):
+        return '{}({})'.format(DiffOps.get_op_str(self.op), self.op)
+
+
 # ---------------------------------------------
 # Exceptions
 # ---------------------------------------------

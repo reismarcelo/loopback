@@ -2,14 +2,15 @@
     <kickers xmlns="http://tail-f.com/ns/kicker">
         <data-kicker>
             <id>resource-diff-iter</id>
-            <monitor>/loopback:resource-manager/loopback:id-pool/loopback:allocation</monitor>
-            <kick-node>/loopback:resource-manager</kick-node>
+            <monitor>/loopback:external-resource-manager/loopback:id-pool/loopback:allocation</monitor>
+            <kick-node>/loopback:external-resource-manager</kick-node>
+            <trigger-expr>request</trigger-expr>
             <action-name>diff-iter</action-name>
         </data-kicker>
     </kickers>
-    <resource-manager xmlns="http://com/ciscoas/services/loopback">
+    <external-resource-manager xmlns="http://com/ciscoas/services/loopback">
         <id-pool>
             <name>{$POOL_NAME}</name>
         </id-pool>
-    </resource-manager>
+    </external-resource-manager>
 </config-template>

@@ -1,6 +1,6 @@
 
 Loopback package
-------------------------
+-----------------
 
 Provided a device name this package will allocate an configure an address on its loopback interface. The goal is to
 demonstrate the use of kickers to implement an external resource manager. Resource allocations are tracked in a JSON
@@ -33,17 +33,19 @@ admin@ncs# unhide debug
 c. Show running kickers:
 admin@ncs# show running-config kickers
 kickers data-kicker resource-diff-iter
- monitor     /loopback:resource-manager/loopback:id-pool/loopback:allocation
- kick-node   /resource-manager
- action-name diff-iter
+ monitor      /loopback:external-resource-manager/loopback:id-pool/loopback:allocation
+ trigger-expr request
+ kick-node    /external-resource-manager
+ action-name  diff-iter
 !
 <snip>
 
 
 2) Specifying device to configure the loopback
 
-admin@ncs(config)# services clean-interfaces device A3-ASR9K-R6
-admin@ncs(config-device-A3-ASR9K-R6)# commit
+admin@ncs(config)# services loopback device IOS-0
+admin@ncs(config-device-IOS-0)# commit
+
 
 
 

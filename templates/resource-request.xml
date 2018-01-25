@@ -1,5 +1,5 @@
 <config-template xmlns="http://tail-f.com/ns/config/1.0">
-    <resource-manager xmlns="http://com/ciscoas/services/loopback">
+    <external-resource-manager xmlns="http://com/ciscoas/services/loopback">
         <id-pool tags="nocreate">
             <name>{$POOL_NAME}</name>
             <allocation tags="merge">
@@ -7,5 +7,5 @@
                 <request/>
             </allocation>
         </id-pool>
-    </resource-manager>
+    </external-resource-manager>
 </config-template>

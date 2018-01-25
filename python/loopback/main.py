@@ -6,7 +6,7 @@ from ncs.maapi import Maapi
 import json
 import threading
 import os
-from loopback.utils import apply_template, plan_data_service, get_xpath
+from loopback.utils import apply_template, plan_data_service
 
 
 # --------------------------------------------------
@@ -21,7 +21,7 @@ class Config(object):
 # ---------------------------------------------
 class LoopbackService(Service):
     @Service.create
-    @plan_data_service('loopback:requested-allocations')
+    @plan_data_service('loopback:allocations-ready')
     def cb_create(self, tctx, root, service, proplist, self_plan):
 
         r_vars = {
@@ -30,13 +30,13 @@ class LoopbackService(Service):
         }
         apply_template('resource-request', service, r_vars)
 
-        self_plan.set_reached('loopback:requested-allocations')
-
         alloc_id = id_read(tctx.username, root, Config.ID_POOL, '{}-{}'.format(service.name, 1))
         self.log.info('ID is {}'.format(alloc_id))
         if alloc_id is None:
             apply_template('service-callback', service, r_vars)
             return
+
+        self_plan.set_reached('loopback:allocations-ready')
 
         t_vars = {
             'ADDRESS': '1.2.3.{}'.format(alloc_id),
@@ -64,15 +64,12 @@ class DiffIterAction(Action):
     def cb_action(self, uinfo, name, kp, input, output):
 
         def iterate(keypath, op, old_value, new_value):
-            self.log.info('Diff iterate: kp: {}, op: {}'.format(keypath, DiffOps(op)))
-
             if op == ncs.MOP_CREATED and len(keypath) > 3 and str(keypath[0]) == 'request':
-                # /loopback:resource-manager/id-pool{pool-1}/allocation{XR-0-1}/request
+                # /loopback:external-resource-manager/id-pool{pool-1}/allocation{XR-0-1}/request
                 allocation_id = kp_value(keypath[1])
                 pool_name = kp_value(keypath[3])
 
                 assigned_id = id_allocator.allocate(allocation_id, pool_name)
-
                 if assigned_id is None:
                     self.log.error('Resource pool {} exhausted'.format(pool_name))
                 else:
@@ -80,30 +77,29 @@ class DiffIterAction(Action):
                         ncs.maagic.get_node(write_t, keypath)._parent.response.assigned_id = assigned_id
                         write_t.apply()
 
-                    self.log.info('Allocate: {}, {}, value: {}'.format(pool_name, allocation_id, assigned_id))
+                    self.log.info('Allocated: {}, {}, value: {}'.format(pool_name, allocation_id, assigned_id))
 
             elif op == ncs.MOP_DELETED and len(keypath) > 2 and str(keypath[1]) == 'allocation':
-                # /loopback:resource-manager/id-pool{pool-1}/allocation{XR-0-1}
+                # /loopback:external-resource-manager/id-pool{pool-1}/allocation{XR-0-1}
                 allocation_id = kp_value(keypath[0])
                 pool_name = kp_value(keypath[2])
 
                 diff_size = id_allocator.deallocate(allocation_id, pool_name)
+                self.log.info('De-allocated: {}, {}, {} changes'.format(pool_name, allocation_id, diff_size))
 
-                self.log.info('De-Allocate: {}, {}, {} changes'.format(pool_name, allocation_id, diff_size))
+            else:
+                return ncs.ITER_RECURSE
 
-            return ncs.ITER_RECURSE
-            # TODO: Replace with this when the kickers issue is figured out
-            # else:
-            #    return ncs.ITER_RECURSE
-            #
-            # return ncs.ITER_STOP
+            return ncs.ITER_STOP
 
         self.log.info('Action input: kicker-id: {}, path: {}, tid: {}'.format(input.kicker_id, input.path, input.tid))
-
         id_allocator = FileAllocator(Config.ID_POOL)
-
-        with Maapi() as m, m.attach(input.tid) as t:
-            t.diff_iterate(iterate, ncs.ITER_WANT_P_CONTAINER)
+        with Maapi() as m:
+            try:
+                t = m.attach(input.tid)
+                t.diff_iterate(iterate, ncs.ITER_WANT_P_CONTAINER)
+            finally:
+                m.detach(input.tid)
 
 
 # ---------------------------------------------
@@ -137,7 +133,7 @@ def id_read(username, root, pool_name, allocation_id):
     """
 
     # Look in the current transaction
-    id_pool_list = root.loopback__resource_manager.id_pool
+    id_pool_list = root.loopback__external_resource_manager.id_pool
     if pool_name not in id_pool_list:
         raise LookupError("Pool {} does not exist".format(pool_name))
     if allocation_id not in id_pool_list[pool_name].allocation:
@@ -145,7 +141,7 @@ def id_read(username, root, pool_name, allocation_id):
 
     # Now we switch from the current transaction to actually see if we have received the allocation
     with ncs.maapi.single_read_trans(username, "system", db=ncs.OPERATIONAL) as th:
-        id_pool_list = ncs.maagic.get_root(th).loopback__resource_manager.id_pool
+        id_pool_list = ncs.maagic.get_root(th).loopback__external_resource_manager.id_pool
         if pool_name not in id_pool_list:
             return None
 
@@ -158,15 +154,14 @@ def id_read(username, root, pool_name, allocation_id):
 
 class FileAllocator(object):
     _lock = threading.Lock()
-
-    init_pool_data = {'range': {'start': 1, 'end': 10}, 'allocations': []}
+    _init_pool_data = {'range': {'start': 1, 'end': 254}, 'allocations': []}
 
     def __init__(self, default_pool=None, db_file=None):
         self._db_file = os.path.join('resource-pools.json') if db_file is None else db_file
 
         if not os.path.exists(self._db_file):
             if default_pool is not None:
-                self._save({default_pool: FileAllocator.init_pool_data})
+                self._save({default_pool: FileAllocator._init_pool_data})
             else:
                 raise FileNotFoundError('Pool database file not found: {}'.format(self._db_file))
 
@@ -208,30 +203,11 @@ class FileAllocator(object):
             json.dump(pool_db, f, indent=2)
 
 
-class DiffOps(object):
-    op_dict = {
-        ncs.MOP_ATTR_SET: 'MOP_ATTR_SET',
-        ncs.MOP_CREATED: 'MOP_CREATED',
-        ncs.MOP_DELETED: 'MOP_DELETED',
-        ncs.MOP_MODIFIED: 'MOP_MODIFIED',
-        ncs.MOP_MOVED_AFTER: 'MOP_MOVED_AFTER',
-        ncs.MOP_VALUE_SET: 'MOP_VALUE_SET',
-    }
-
-    def __init__(self, op):
-        self.op = op
-
-    def __str__(self):
-        return '{}({})'.format(DiffOps.op_dict.get(self.op, 'unknown'), self.op)
-
-
 # ---------------------------------------------
 # COMPONENT THREAD THAT WILL BE STARTED BY NCS.
 # ---------------------------------------------
 class Main(ncs.application.Application):
     def setup(self):
-        # The application class sets up logging for us. It is accessible
-        # through 'self.log' and is a ncs.log.Log instance.
         self.log.info('Main RUNNING')
 
         # Registration of service callbacks

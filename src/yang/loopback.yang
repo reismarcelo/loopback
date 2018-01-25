@@ -32,12 +32,17 @@ module loopback {
       "Initial revision.";
   }
 
+  revision 2018-01-25 {
+    description
+      "Clean-up of the resource-manager container.";
+  }
+
 
   // =========================================================================
   //  IDENTITIES
   // =========================================================================
 
-  identity requested-allocations {
+  identity allocations-ready {
     base ncs:plan-state;
   }
 
@@ -81,6 +86,7 @@ module loopback {
       } // list device
 
       container setup {
+        tailf:info "Perform one-time setup of the service";
         uses ncs:service-data;
         ncs:servicepoint "loopback-setup";
 
@@ -90,7 +96,7 @@ module loopback {
     } // container loopback
   } // augment services
 
-  container resource-manager {
+  container external-resource-manager {
     tailf:info "Configure resource management pools";
     tailf:cli-add-mode;
 
