@@ -6,6 +6,8 @@ Provided a device name this package will allocate an configure an address on its
 demonstrate the use of kickers to implement an external resource manager. Resource allocations are tracked in a JSON
 file.
 
+There is also code to demonstrate using custom validators in python. This is used to validate the description field.
+
 1) Initial setup
 
 The resource allocations file 'resource-pools.json' is automatically created with some predefined defaults if it doesn't
