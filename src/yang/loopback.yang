@@ -27,14 +27,19 @@ module loopback {
   //  REVISION
   // =========================================================================
 
-  revision 2017-12-08 {
+  revision 2018-02-16 {
     description
-      "Initial revision.";
+      "Include custom validation sample code.";
   }
 
   revision 2018-01-25 {
     description
       "Clean-up of the resource-manager container.";
+  }
+
+  revision 2017-12-08 {
+    description
+      "Initial revision.";
   }
 
 
@@ -73,6 +78,17 @@ module loopback {
           type leafref {
             path "/ncs:devices/ncs:device/ncs:name";
           }
+        }
+
+        leaf description {
+          tailf:info "Loopback interface description";
+
+          tailf:validate description-validate {
+            tailf:dependency ".";
+            tailf:dependency "../loopback-id";
+          }
+
+          type string;
         }
 
         leaf loopback-id {

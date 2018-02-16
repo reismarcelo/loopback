@@ -1,7 +1,11 @@
 import ncs.template
 from ncs.application import PlanComponent
+from ncs.maapi import Maapi
+from ncs.dp import Daemon, take_worker_socket, return_worker_socket
+from _ncs.dp import register_valpoint_cb, register_trans_validate_cb, trans_set_fd
 import functools
 import re
+import os
 _tm = __import__(ncs.tm.TM)
 
 
@@ -163,9 +167,142 @@ class DiffOps(object):
         return '{}({})'.format(DiffOps.get_op_str(self.op), self.op)
 
 
+class Validation(object):
+    """
+    Convenience class for custom validation callbacks
+
+    1) Create a custom validation class extending Validation
+    Your custom validation class needs to implement the validate method. Optionally it can have init and stop
+    methods, which get called at the beginning and end of the transaction validation phase.
+
+    class CustomValidation(Validation):
+        def validate(self, tctx, kp, newval, root):
+            self.log.info('validate a called')
+            return ncs.CONFD_OK
+
+        def init(self, tctx):
+            self.log.info('custom init a called')
+
+        def stop(self, tctx):
+            self.log.info('custom stop a called')
+
+    2) Decorate your application class with custom_validators and register your custom validation class:
+    The decorator allows calling self.register_validation within the setup method in a similar way as the builtin
+    register_service and register_action methods.
+
+    @Validation.custom_validators
+    class Main(ncs.application.Application):
+        def setup(self):
+            ...
+            self.register_validation('custom-validate-a', CustomValidation)
+            ...
+    """
+
+    @staticmethod
+    def custom_validators(cls):
+
+        if not issubclass(cls, ncs.application.Application):
+            raise TypeError('custom_validators can only decorate ncs.application.Application subclasses')
+
+        original_init = cls.__init__
+        original_setup = cls.setup
+        original_teardown = cls.teardown
+
+        def __init__(self, *args, **kwargs):
+            original_init(self, *args, **kwargs)
+            self._daemons = []
+
+        def setup(self):
+            r = original_setup(self)
+
+            for daemon in self._daemons:
+                daemon.start()
+
+            return r
+
+        def teardown(self):
+            r = original_teardown(self)
+
+            for daemon in self._daemons:
+                daemon.finish()
+
+            return r
+
+        def register_validation(self, validation_point, validation_cls):
+            daemon = Daemon('ncs-dp-{0}-{1}:{2}'.format(os.getpid(), self._ncs_pname, validation_point), log=self.log)
+            v = validation_cls(daemon, validation_point)
+            register_trans_validate_cb(daemon.ctx(), v)
+            register_valpoint_cb(daemon.ctx(), validation_point, v)
+            self._daemons.append(daemon)
+
+        cls.__init__ = __init__
+        cls.setup = setup
+        cls.teardown = teardown
+        cls.register_validation = register_validation
+
+        return cls
+
+    def __init__(self, daemon, validation_point):
+        self.validation_point = validation_point
+        self.log = daemon.log
+        self.maapi = None
+        self.trans = None
+        self.daemon = daemon
+
+    def cb_init(self, tctx):
+        if self.maapi is None:
+            self.maapi = Maapi()
+        self.trans = self.maapi.attach(tctx)
+
+        name = 'th-{0}'.format(tctx.th)
+        wsock = take_worker_socket(self.daemon, name, self._make_key(tctx))
+        try:
+            init_cb = getattr(self, 'init', None)
+            if callable(init_cb):
+                init_cb(tctx)
+
+            # Associate worker socket with the transaction
+            trans_set_fd(tctx, wsock)
+
+        except Exception as e:
+            return_worker_socket(self.daemon, self._make_key(tctx))
+            raise
+
+    def cb_stop(self, tctx):
+        try:
+            stop_cb = getattr(self, 'stop', None)
+            if callable(stop_cb):
+                stop_cb(tctx)
+
+        finally:
+            try:
+                self.maapi.detach(tctx)
+            except Exception as e:
+                pass
+
+            self.trans = None
+            return_worker_socket(self.daemon, self._make_key(tctx))
+
+    def cb_validate(self, tctx, kp, newval):
+        validate_cb = getattr(self, 'validate', None)
+        if callable(validate_cb):
+            root = ncs.maagic.get_root(self.trans, shared=False)
+            return validate_cb(tctx, kp, newval, root)
+
+        raise NotImplementedError()
+
+    def _make_key(self, tctx):
+        return '{0}-{1}'.format(id(self), tctx.th)
+
+
 # ---------------------------------------------
 # Exceptions
 # ---------------------------------------------
 class NcsServiceError(Exception):
     """ Exception indicating error during service create """
+    pass
+
+
+class ValidationError(Exception):
+    """ Exception indicating error on custom validation """
     pass

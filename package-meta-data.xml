@@ -1,6 +1,6 @@
 <ncs-package xmlns="http://tail-f.com/ns/ncs-packages">
   <name>loopback</name>
-  <package-version>1.1</package-version>
+  <package-version>1.2</package-version>
   <description>Allocate loopback interface addresses</description>
   <ncs-min-version>4.5</ncs-min-version>
 

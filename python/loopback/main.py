@@ -6,7 +6,8 @@ from ncs.maapi import Maapi
 import json
 import threading
 import os
-from loopback.utils import apply_template, plan_data_service
+import re
+from loopback.utils import apply_template, plan_data_service, Validation, ValidationError
 
 
 # --------------------------------------------------
@@ -73,7 +74,7 @@ class DiffIterAction(Action):
                 if assigned_id is None:
                     self.log.error('Resource pool {} exhausted'.format(pool_name))
                 else:
-                    with ncs.maapi.single_write_trans(uinfo.username, uinfo.context, db=ncs.OPERATIONAL) as write_t:
+                    with ncs.maapi.single_write_trans(uinfo.username, "system", db=ncs.OPERATIONAL) as write_t:
                         ncs.maagic.get_node(write_t, keypath)._parent.response.assigned_id = assigned_id
                         write_t.apply()
 
@@ -100,6 +101,21 @@ class DiffIterAction(Action):
                 t.diff_iterate(iterate, ncs.ITER_WANT_P_CONTAINER)
             finally:
                 m.detach(input.tid)
+
+
+# ---------------------------------------------
+# CUSTOM VALIDATORS
+# ---------------------------------------------
+class DescriptionValidation(Validation):
+
+    def validate(self, tctx, kp, newval, root):
+        self.log.info('Validate called: keypath: {}, newval: {}'.format(kp, newval))
+
+        loopback_id = ncs.maagic.cd(root, kp[1:]).loopback_id
+        if re.match(r"### Loopback {} - [ \w-]+ ###$".format(loopback_id), str(newval)):
+            return ncs.CONFD_OK
+
+        raise ValidationError('Description must follow the format "### Loopback <id> - <text> ###".')
 
 
 # ---------------------------------------------
@@ -206,6 +222,7 @@ class FileAllocator(object):
 # ---------------------------------------------
 # COMPONENT THREAD THAT WILL BE STARTED BY NCS.
 # ---------------------------------------------
+@Validation.custom_validators
 class Main(ncs.application.Application):
     def setup(self):
         self.log.info('Main RUNNING')
@@ -216,6 +233,9 @@ class Main(ncs.application.Application):
 
         # Registration of action callbacks
         self.register_action('diff-iter-action', DiffIterAction)
+
+        # Registration of custom validation callbacks
+        self.register_validation('description-validate', DescriptionValidation)
 
     def teardown(self):
         self.log.info('Main FINISHED')
