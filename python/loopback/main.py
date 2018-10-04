@@ -112,7 +112,7 @@ class DescriptionValidation(Validation):
         self.log.info('Validate called: keypath: {}, newval: {}'.format(kp, newval))
 
         loopback_id = ncs.maagic.cd(root, kp[1:]).loopback_id
-        if re.match(r"### Loopback {} - [ \w-]+ ###$".format(loopback_id), str(newval)):
+        if re.match(r"### Loopback {} - [^#]+###$".format(loopback_id), str(newval)):
             return ncs.CONFD_OK
 
         raise ValidationError('Description must follow the format "### Loopback <id> - <text> ###".')

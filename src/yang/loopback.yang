@@ -104,7 +104,7 @@ module loopback {
       container setup {
         tailf:info "Perform one-time setup of the service";
         uses ncs:service-data;
-        ncs:servicepoint "loopback-setup";
+        ncs:servicepoint loopback-setup;
 
         presence yes;
       }
