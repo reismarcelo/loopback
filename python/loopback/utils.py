@@ -31,7 +31,6 @@ def plan_data_service(*custom_states):
             except NcsServiceError as e:
                 self.log.error(e)
                 self_plan.set_failed('ncs:ready')
-                raise
             else:
                 self_plan.set_reached('ncs:ready')
 
@@ -157,7 +156,7 @@ class DiffOps(object):
     @staticmethod
     def get_op_str(int_op):
         """
-        Return the correspondign string value of a diff-iterate operation
+        Return the corresponding string value of a diff-iterate operation
 
         :param int_op: integer representing an ncs diff-iterate operation
         :return: string value of the operation
